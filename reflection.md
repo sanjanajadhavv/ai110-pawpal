@@ -6,6 +6,19 @@
 
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
+    - Classes:
+        - Animal 
+            - attributes: name, age, type of animal, Set of Owners
+            - methods: constructor
+        - Owner
+            - attributes: name, availability, preferences, Set of Pets
+            - methods: constructor, add pet, remove pet, update availability
+        - Task
+            - attributes: name, priority, frequency, deadline
+            - methods: constructor, remove task
+        - Scheduler
+            - attributes: list of tasks
+            - methods: constructor, create schedule
 
 **b. Design changes**
 
