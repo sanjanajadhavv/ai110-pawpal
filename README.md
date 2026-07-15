@@ -96,17 +96,31 @@ Buddy's tasks:
 
 ```bash
 # Run the full test suite:
-pytest
+python -m pytest
 
 # Run with coverage:
-pytest --cov
+python -m pytest --cov
+
 ```
 
 Sample test output:
 
 ```
-# Paste your pytest output here
+............                                                                                                 [100%]
+
+========================================================== 12 passed in 0.01s ===========================================================
 ```
+
+The suite (`tests/test_pawpal.py`) covers 12 cases across three behaviors, plus a couple of the original smoke tests:
+
+- **Sorting** — chronological ordering, and the trickier case of a recurring task's next occurrence sharing today's clock time but landing on a future date (sorts by full `deadline`, not time-of-day).
+- **Recurrence** — daily → next-day spawn, weekly → next-week spawn, one-off tasks spawning nothing, and the scheduler registering a new occurrence immediately on completion.
+- **Conflict detection** — two tasks at the identical start time, back-to-back tasks that shouldn't conflict, and completed tasks correctly excluded from the check.
+- **Edge case** — a pet with no tasks returns empty lists everywhere instead of raising.
+
+**Confidence Level: ⭐⭐⭐⭐☆ (4/5)**
+
+The core scheduling logic (sorting, recurrence, conflict detection) is well covered and all tests pass. Confidence isn't higher because `create_schedule()` end-to-end (multi-window packing, `check_constraints`, overdue-task labeling), `prioritize_tasks()`'s priority/preference/deadline ordering, and the Streamlit UI (`app.py`) have no test coverage yet — the risk of a regression there is unverified, not just unlikely.
 
 ## 📐 Smarter Scheduling
 
