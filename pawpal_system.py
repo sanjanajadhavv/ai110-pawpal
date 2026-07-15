@@ -80,7 +80,10 @@ class Pet:
         return list(self.tasks)
 
 
-@dataclass
+# eq=False so Task uses object identity for __eq__ and __hash__: two tasks
+# with identical field values (e.g. a user adding the same walk twice) are
+# still distinct entries, matching the same reasoning Pet uses above.
+@dataclass(eq=False)
 class Task:
     name: str
     priority: Priority

@@ -1,0 +1,110 @@
+classDiagram
+    class Pet {
+        +String name
+        +int age
+        +String species
+        +String breed
+        +Set~Owner~ owners
+        +List~Task~ tasks
+        +add_owner(owner: Owner)
+        +remove_owner(owner: Owner)
+        +add_task(task: Task)
+        +get_tasks() List~Task~
+    }
+
+    class Owner {
+        +String name
+        +Dict availability
+        +List~String~ preferences
+        +Set~Pet~ pets
+        +DailyPlan daily_plan
+        +add_pet(pet: Pet)
+        +remove_pet(pet: Pet)
+        +update_availability(time_slots: Dict)
+        +get_schedule() DailyPlan
+    }
+
+    class Task {
+        +String name
+        +Priority priority
+        +String frequency
+        +datetime deadline
+        +int duration_minutes
+        +TaskType task_type
+        +Pet pet
+        +bool is_completed
+        +remove_task()
+        +mark_complete() Task
+        +is_due() bool
+        +get_time_required() int
+    }
+
+    class ScheduledTask {
+        +Task task
+        +time start_time
+        +time end_time
+        +String rationale
+        +int duration_minutes
+        +get_duration() int
+    }
+
+    class DailyPlan {
+        +date plan_date
+        +List~ScheduledTask~ scheduled_tasks
+        +int total_time_minutes
+        +add_scheduled_task(task: ScheduledTask)
+        +get_summary() String
+        +get_explanation() String
+    }
+
+    class Scheduler {
+        +List~Task~ tasks
+        +Owner owner
+        +List~Pet~ pets
+        +DailyPlan daily_plan
+        +String explanation
+        +List~String~ conflicts
+        +create_schedule() DailyPlan
+        +add_task(task: Task)
+        +remove_task(task: Task)
+        +mark_task_complete(task: Task) Task
+        +detect_conflicts() List~String~
+        +prioritize_tasks() List~Task~
+        +sort_by_time() List~Task~
+        +filter_tasks(is_completed: bool, pet_name: String) List~Task~
+        +check_constraints(task: Task) bool
+        +explain_plan() String
+    }
+
+    class Priority {
+        <<enumeration>>
+        HIGH
+        MEDIUM
+        LOW
+    }
+
+    class TaskType {
+        <<enumeration>>
+        WALK
+        FEEDING
+        MEDICATION
+        ENRICHMENT
+        GROOMING
+        VET_VISIT
+        TRAINING
+        PLAY
+    }
+
+    Owner "1..*" <--> "1..*" Pet : owns (bidirectional)
+    Pet "1" *-- "0..*" Task : has (bidirectional, owned)
+    Task --> Priority : has
+    Task --> TaskType : categorized as
+    Task ..> Task : mark_complete() spawns next occurrence
+    ScheduledTask "1" --> "1" Task : wraps
+    DailyPlan "1" *-- "0..*" ScheduledTask : contains (owned)
+    Scheduler "1" --> "1" Owner : schedules for
+    Scheduler "1" --> "1..*" Pet : manages
+    Scheduler "1" --> "0..*" Task : tracks
+    Scheduler "1" --> "1" DailyPlan : produces
+    Scheduler ..> Owner : reads preferences/availability to prioritize + constrain
+    Owner "1" --> "0..1" DailyPlan : current schedule
