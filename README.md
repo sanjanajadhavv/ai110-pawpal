@@ -44,14 +44,52 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+```============================================================
+  PawPal — Today's Schedule for Jordan
+  Wednesday, July 15 2026
+  Available: 07:00 AM – 09:00 AM, 05:00 PM – 07:00 PM
+============================================================
+  ○ 07:00 AM – 07:10 AM  |  FEEDING       Breakfast               [HIGH]  (Buddy)
+  ○ 07:10 AM – 07:40 AM  |  WALK          Morning Walk            [HIGH]  (Buddy)
+  ○ 07:40 AM – 07:45 AM  |  MEDICATION    Hairball Medication     [MEDIUM]  (Whiskers)
+  ○ 05:00 PM – 05:10 PM  |  FEEDING       Evening Feeding         [HIGH]  (Whiskers)
+  ○ 05:10 PM – 05:25 PM  |  GROOMING      Evening Brushing        [LOW]  (Buddy)
+  ○ 05:25 PM – 05:45 PM  |  PLAY          Fetch & Play            [LOW]  (Buddy)
+------------------------------------------------------------
+  Total tasks: 6   |   Total time: 90 min
+============================================================
 
-```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Scheduling conflicts:
+  ⚠ Conflict: 'Evening Brushing' (Buddy) at 17:30 overlaps 'Evening Feeding' (Whiskers) at 17:30.
+
+Completed 'Breakfast' — next occurrence spawned for 2026-07-16 07:30.
+
+Tasks sorted by time:
+  2026-07-15 07:30  Breakfast              (Buddy)
+  2026-07-15 08:00  Morning Walk           (Buddy)
+  2026-07-15 08:30  Hairball Medication    (Whiskers)
+  2026-07-15 17:30  Evening Brushing       (Buddy)
+  2026-07-15 17:30  Evening Feeding        (Whiskers)
+  2026-07-15 18:00  Fetch & Play           (Buddy)
+  2026-07-16 07:30  Breakfast              (Buddy)
+
+Incomplete tasks:
+  Morning Walk           (Buddy)
+  Fetch & Play           (Buddy)
+  Evening Brushing       (Buddy)
+  Hairball Medication    (Whiskers)
+  Evening Feeding        (Whiskers)
+  Breakfast              (Buddy)
+
+Completed tasks:
+  Breakfast              (Buddy)
+
+Buddy's tasks:
+  Morning Walk           [HIGH]
+  Breakfast              [HIGH]
+  Fetch & Play           [LOW]
+  Evening Brushing       [LOW]
+  Breakfast              [HIGH]
 ```
 
 ## 🧪 Testing PawPal+
@@ -72,14 +110,12 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()` | Returns all tasks sorted by their full `deadline` (earliest first). Sorting on the whole datetime — not just time-of-day — matters once recurring tasks exist, since a task's next occurrence lands on a later date but can share the same clock time as today's. |
+| Filtering | `Scheduler.filter_tasks(is_completed=None, pet_name=None)` | Returns tasks matching either or both criteria — completion status and/or the owning pet's name — so a caller can ask for e.g. "everything still open for Buddy" without writing a list comprehension. |
+| Conflict detection | `Scheduler.detect_conflicts()` | Flags any two (incomplete) tasks whose requested `[deadline, deadline + duration]` windows overlap, regardless of which pet they belong to — the owner physically can't do two things at once. It sorts tasks by start time and sweeps once, so it's O(n log n) rather than checking every pair, and it always returns a list of warning strings instead of raising, so a conflict never crashes the schedule build. `Scheduler.create_schedule()` recomputes this list (`scheduler.conflicts`) on every call. |
+| Recurring tasks | `Task.mark_complete()`, `Task._spawn_next_occurrence()`, `Scheduler.mark_task_complete()` | Completing a task with `frequency` of `"daily"` or `"weekly"` automatically creates the next occurrence via `deadline + timedelta(...)` and attaches it to the same pet. `timedelta` arithmetic (rather than manually incrementing date fields) keeps the date math correct across month/year boundaries. `Scheduler.mark_task_complete()` is the entry point to use from a scheduler so the new occurrence is registered in `scheduler.tasks` immediately, without waiting for the next `create_schedule()` refresh. |
 
 ## 📸 Demo Walkthrough
 

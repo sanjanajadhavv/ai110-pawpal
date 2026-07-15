@@ -29,6 +29,15 @@ class TaskType(Enum):
 
 _PRIORITY_ORDER = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
 
+# Maps a Task.frequency value to how far past the just-completed deadline
+# the next occurrence should land. timedelta arithmetic on a datetime carries
+# the date forward correctly across month/year boundaries and DST changes,
+# so "deadline + timedelta(days=1)" is always "same time, next day".
+_RECURRENCE_INTERVALS = {
+    "daily": timedelta(days=1),
+    "weekly": timedelta(weeks=1),
+}
+
 
 # ---------------------------------------------------------------------------
 # Dataclasses  (Pet, Task, ScheduledTask)
@@ -86,9 +95,31 @@ class Task:
         """Remove this task from its pet's task list."""
         self.pet.tasks.remove(self)
 
-    def mark_complete(self) -> None:
-        """Mark this task as completed."""
+    def mark_complete(self) -> Optional["Task"]:
+        """Mark this task completed, spawning the next occurrence if it recurs.
+
+        Returns the newly created Task for a "daily"/"weekly" frequency, or
+        None for a one-off task.
+        """
         self.is_completed = True
+        return self._spawn_next_occurrence()
+
+    def _spawn_next_occurrence(self) -> Optional["Task"]:
+        """Create and attach the next occurrence of this task, if it recurs."""
+        interval = _RECURRENCE_INTERVALS.get(self.frequency.strip().lower())
+        if interval is None:
+            return None
+        next_task = Task(
+            name=self.name,
+            priority=self.priority,
+            frequency=self.frequency,
+            deadline=self.deadline + interval,
+            duration_minutes=self.duration_minutes,
+            task_type=self.task_type,
+            pet=self.pet,
+        )
+        self.pet.add_task(next_task)
+        return next_task
 
     def is_due(self) -> bool:
         """Return whether this task's deadline has passed."""
@@ -186,6 +217,7 @@ class Scheduler:
         self.pets = pets
         self.daily_plan: Optional[DailyPlan] = None
         self.explanation: str = ""
+        self.conflicts: list[str] = []
         # Flatten tasks from all managed pets into a single list.
         # self.pets (not owner.pets) is used: Scheduler manages a specific
         # ordered subset, while owner.pets is an unordered set of all pets.
@@ -195,9 +227,40 @@ class Scheduler:
         """Rebuild the task list from the managed pets' current tasks."""
         self.tasks = [t for pet in self.pets for t in pet.get_tasks()]
 
+    def detect_conflicts(self) -> list[str]:
+        """Return warnings for tasks whose requested time windows overlap.
+
+        Lightweight by design: two (incomplete) tasks conflict when their
+        [deadline, deadline + duration] windows overlap, regardless of which
+        pet they belong to — the owner physically can't do both at once.
+        Sorting by start time first turns this into a single linear sweep
+        instead of an all-pairs comparison. This never raises; a conflict is
+        just reported back as a string for the caller to display.
+        """
+        warnings: list[str] = []
+        windows = sorted(
+            (
+                (t.deadline, t.deadline + timedelta(minutes=t.duration_minutes), t)
+                for t in self.tasks
+                if not t.is_completed
+            ),
+            key=lambda w: w[0],
+        )
+        for i, (start_a, end_a, task_a) in enumerate(windows):
+            for start_b, _, task_b in windows[i + 1:]:
+                if start_b >= end_a:
+                    break  # sorted by start time: nothing later can overlap task_a either
+                warnings.append(
+                    f"Conflict: '{task_a.name}' ({task_a.pet.name}) at "
+                    f"{start_a.strftime('%H:%M')} overlaps '{task_b.name}' "
+                    f"({task_b.pet.name}) at {start_b.strftime('%H:%M')}."
+                )
+        return warnings
+
     def create_schedule(self) -> DailyPlan:
         """Build and return today's daily plan from the owner's availability."""
         self._refresh_tasks()
+        self.conflicts = self.detect_conflicts()
         plan = DailyPlan(date.today())
         today = date.today()
         # Only tasks due today or already overdue belong in today's plan; a task
@@ -254,6 +317,16 @@ class Scheduler:
         if task in self.tasks:
             self.tasks.remove(task)
 
+    def mark_task_complete(self, task: Task) -> Optional[Task]:
+        """Mark a task complete and register any newly spawned recurrence.
+
+        Returns the next occurrence Task if `task` recurs, else None.
+        """
+        next_task = task.mark_complete()
+        if next_task is not None and next_task not in self.tasks:
+            self.tasks.append(next_task)
+        return next_task
+
     def _matches_preference(self, task: Task) -> bool:
         """Return whether a task matches one of the owner's stated preferences."""
         haystacks = (task.task_type.name, task.task_type.value, task.name)
@@ -271,6 +344,31 @@ class Scheduler:
             self.tasks,
             key=lambda t: (_PRIORITY_ORDER[t.priority], not self._matches_preference(t), t.deadline),
         )
+
+    def sort_by_time(self) -> list[Task]:
+        """Return tasks sorted by their full deadline (earliest first).
+
+        Sorts on the whole datetime rather than just time-of-day: recurring
+        ("daily"/"weekly") tasks spawn future occurrences on later dates, and
+        sorting by time-of-day alone would interleave today's 7:30 breakfast
+        with next week's 7:30 breakfast instead of ordering them by date.
+        """
+        # A datetime (or a zero-padded "HH:MM" string) sorts lexicographically
+        # in the same order as chronologically, so this key works either way.
+        return sorted(self.tasks, key=lambda t: t.deadline)
+
+    def filter_tasks(
+        self,
+        is_completed: Optional[bool] = None,
+        pet_name: Optional[str] = None,
+    ) -> list[Task]:
+        """Return tasks matching the given completion status and/or pet name."""
+        tasks = self.tasks
+        if is_completed is not None:
+            tasks = [t for t in tasks if t.is_completed == is_completed]
+        if pet_name is not None:
+            tasks = [t for t in tasks if t.pet.name == pet_name]
+        return tasks
 
     def check_constraints(self, task: Task) -> bool:
         """Return whether a task can feasibly fit in the owner's availability."""

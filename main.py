@@ -105,10 +105,55 @@ def main() -> None:
         pet=whiskers,
     ))
 
+    # Deliberately conflicts with Whiskers' "Evening Feeding" above — both are
+    # due at 17:30, and Jordan can't feed Whiskers and brush Buddy at once.
+    buddy.add_task(Task(
+        name="Evening Brushing",
+        priority=Priority.LOW,
+        frequency="daily",
+        deadline=today.replace(hour=17, minute=30),
+        duration_minutes=15,
+        task_type=TaskType.GROOMING,
+        pet=buddy,
+    ))
+
     # --- Generate & print schedule ---
     scheduler = Scheduler(owner=owner, pets=[buddy, whiskers])
     plan = scheduler.create_schedule()
     print_schedule(plan, owner)
+
+    print("\nScheduling conflicts:")
+    if scheduler.conflicts:
+        for warning in scheduler.conflicts:
+            print(f"  ⚠ {warning}")
+    else:
+        print("  None detected.")
+
+    # Mark one task complete so the completion filter has something to show.
+    # Breakfast is "daily", so this also spawns tomorrow's occurrence.
+    breakfast = scheduler.tasks[1]
+    next_occurrence = scheduler.mark_task_complete(breakfast)
+    if next_occurrence is not None:
+        print(
+            f"\nCompleted '{breakfast.name}' — next occurrence spawned for "
+            f"{next_occurrence.deadline.strftime('%Y-%m-%d %H:%M')}."
+        )
+
+    print("\nTasks sorted by time:")
+    for t in scheduler.sort_by_time():
+        print(f"  {t.deadline.strftime('%Y-%m-%d %H:%M')}  {t.name:<22} ({t.pet.name})")
+
+    print("\nIncomplete tasks:")
+    for t in scheduler.filter_tasks(is_completed=False):
+        print(f"  {t.name:<22} ({t.pet.name})")
+
+    print("\nCompleted tasks:")
+    for t in scheduler.filter_tasks(is_completed=True):
+        print(f"  {t.name:<22} ({t.pet.name})")
+
+    print("\nBuddy's tasks:")
+    for t in scheduler.filter_tasks(pet_name="Buddy"):
+        print(f"  {t.name:<22} [{t.priority.value}]")
 
 
 if __name__ == "__main__":
